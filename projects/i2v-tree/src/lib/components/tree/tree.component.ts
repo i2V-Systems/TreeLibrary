@@ -547,15 +547,10 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         }
 
         if (evt.key === ' ' || evt.key === 'Spacebar') {
-            // Space toggles the check when checkboxes are on, matching the platform convention for
-            // a multi-select list; otherwise it falls back to expanding, as zTree did.
-            if (highlighted !== undefined) {
-                if (this.config.checkboxes) {
-                    this.toggleCheck(highlighted);
-                } else {
-                    this.model.toggle(highlighted);
-                }
-            }
+            //spacebar handling the nodes expanding and collapsing
+             if (highlighted !== undefined) {
+        this.model.toggle(highlighted);
+    }
             // Always prevented: space would otherwise scroll the container out from under the user.
             evt.preventDefault();
             return;
