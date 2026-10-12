@@ -72,8 +72,7 @@
  * Full-row keyboard/focus state.
  */
 .i2v-node:focus,
-.i2v-node:focus-visible,
-.i2v-node:focus-within {
+.i2v-node:focus-visible {
     background: #e5f6ff;
     border-color: #1689e5;
 }
@@ -91,8 +90,7 @@
  */
 .i2v-node[aria-selected='true']:hover,
 .i2v-node[aria-selected='true']:focus,
-.i2v-node[aria-selected='true']:focus-visible,
-.i2v-node[aria-selected='true']:focus-within {
+.i2v-node[aria-selected='true']:focus-visible {
     background: #e5f6ff;
     border-color: #1689e5;
 }

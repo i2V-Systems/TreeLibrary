@@ -54,6 +54,7 @@
         [attr.aria-checked]="config.checkboxes && canCheck(node.item) ? isChecked(node.item) : null"
         [attr.title]="getTitle(node.item)" [class.i2v-disabled]="isDisabled(node.item)"
         [style.paddingLeft.rem]="1.875 + node.depth" [style.height.px]="itemHeight" [i2vSetAttrs]="getDomNodeAttr(node)"
+        [attr.draggable]="canDrag(node.item)" (dragstart)="handleDragstart($event, node)"
         (contextmenu)="handleContextMenu($event, node.item)">
         @if (prefixTemplate) {
         <ng-container
@@ -76,7 +77,7 @@
             (click)="handleCheckboxClick($event, node.item)" />
         }
 
-        <div class="i2v-node-title" [draggable]="canDrag(node.item)" (dragstart)="handleDragstart($event, node)"
+        <div class="i2v-node-title"
             (click)="handleRowClick($event, node.item)" (dblclick)="handleRowDblClick($event, node.item)">
             @if (getIconUrl(node); as iconUrl) {
             <img class="i2v-icon-img" [src]="iconUrl" alt="" />

@@ -18,7 +18,7 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { I2vTree } from './tree.model';
-import {i2vUtilityModule} from '@i2v-systems/i2v-utility';
+import { i2vUtilityModule } from '@i2v-systems/i2v-utility';
 import {
     AsyncTreeChildAccessor,
     DefaultIcons,
@@ -457,8 +457,8 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
                 item.type !== 'd' && item.type !== 'Folder'
                     ? item.icon || this.config.itemIcon
                     : this.model.isExpanded(item)
-                    ? DefaultIcons.folderOpen
-                    : DefaultIcons.folder,
+                        ? DefaultIcons.folderOpen
+                        : DefaultIcons.folder,
             getName: (item: any) => item.name,
             getDomNodeAttr: () => undefined,
             itemIcon: DefaultIcons.file,
@@ -872,28 +872,28 @@ this.handleTypeahead(evt);
 
     /** @ignore */
     public handleRowClick(evt: MouseEvent, item: any) {
-    if (this.isDisabled(item)) {
-        return;
-    }
+        if (this.isDisabled(item)) {
+            return;
+        }
 
-    // Existing selection + highlight/focus
-    this.model.selectWithModifiers(item, {
-        ctrl: evt.ctrlKey || evt.metaKey,
-        shift: evt.shiftKey
-    });
-
-    // Expand/collapse when clicking anywhere on an expandable node
-    if (this.model.isExpandable(item)) {
-        this.model.toggle(item);
-
-        this.expandChange.emit({
-            item,
-            expanded: this.model.isExpanded(item)
+        // Existing selection + highlight/focus
+        this.model.selectWithModifiers(item, {
+            ctrl: evt.ctrlKey || evt.metaKey,
+            shift: evt.shiftKey
         });
-    }
 
-    this.rowClick.emit({ event: evt, item });
-}
+        // Expand/collapse when clicking anywhere on an expandable node
+        if (this.model.isExpandable(item)) {
+            this.model.toggle(item);
+
+            this.expandChange.emit({
+                item,
+                expanded: this.model.isExpanded(item)
+            });
+        }
+
+        this.rowClick.emit({ event: evt, item });
+    }
 
     /** @ignore */
     public handleRowDblClick(evt: MouseEvent, item: any) {
@@ -924,6 +924,7 @@ this.handleTypeahead(evt);
     public handleCheckboxClick(evt: Event, item: any) {
         // The row underneath must not select on a checkbox click: picking an item and looking at it
         // are different intents, and a checkbox click means only the former.
+        
         evt.stopPropagation();
         this.toggleCheck(item);
     }
@@ -1018,10 +1019,10 @@ this.handleTypeahead(evt);
 
     /** @ignore */
     public getExpanderIcon(item: any): string {
-    return this.model.isExpanded(item)
-        ? 'assets/Outline/chevron-down.svg'
-        : 'assets/Outline/chevron-right.svg';
-}
+        return this.model.isExpanded(item)
+            ? 'assets/Outline/chevron-down.svg'
+            : 'assets/Outline/chevron-right.svg';
+    }
 
     /**
      * True if the passed item may be dragged. Public so a consumer template can opt into the
