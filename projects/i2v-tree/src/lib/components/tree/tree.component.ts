@@ -528,6 +528,7 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         this.resizeObserver = undefined;
         clearTimeout(this.filterTextThrottle);
         clearTimeout(this.dragExpand.timeout);
+        clearTimeout(this.typeaheadTimeout);
     }
 
     /**
