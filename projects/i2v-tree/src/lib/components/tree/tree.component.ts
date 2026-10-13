@@ -1035,6 +1035,10 @@ this.handleTypeahead(evt);
     public handleDragstart(evt: DragEvent, node: Node<any>) {
         this.ownDragItem = node;
         if (this.canDrag(node.item)) {
+            // Starting a drag is also a row-selection gesture. Use the same model API as
+            // handleRowClick so the dragged row receives the normal selected/highlight state.
+            // Do not touch checkbox state or emit a synthetic click event.
+            this.model.selectWithModifiers(node.item, { ctrl: false, shift: false });
             if (evt.dataTransfer) {
                 evt.dataTransfer.dropEffect = 'move';
                 const dragData = this.getDragData(node.item);
