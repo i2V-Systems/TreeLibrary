@@ -1350,8 +1350,16 @@ this.handleTypeahead(evt);
             return;
         }
         this.renderArea.itemCount = this.model.items.length;
+        // A reload can shrink the data (or clear and refill it). The render area only re-clamps its
+        // scroll position when the viewer height changes, so a stale position left the visible
+        // window pointing past the new data until the next scroll event.
+        const maxScroll = Math.max(0, this.renderArea.totalHeight - this.renderArea.viewerHeight);
+        if (this.renderArea.scrollPos > maxScroll) {
+            this.renderArea.scrollPos = maxScroll;
+        }
         this.updateVisibleItems();
         this.refresh();
+        this.syncScrollPos();
     }
 
     private refresh() {
