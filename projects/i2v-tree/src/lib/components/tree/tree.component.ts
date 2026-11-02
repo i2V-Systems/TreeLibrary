@@ -18,6 +18,7 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { I2vTree } from './tree.model';
+import { i2vUtilityModule } from '@i2v-systems/i2v-utility';
 import {
     AsyncTreeChildAccessor,
     DefaultIcons,
@@ -41,7 +42,7 @@ const TYPEAHEAD_RESET = 1000;
 @Component({
     selector: 'i2v-tree',
     standalone: true,
-    imports: [NgTemplateOutlet, SetAttrsDirective],
+    imports: [NgTemplateOutlet, SetAttrsDirective, i2vUtilityModule],
     templateUrl: './tree.component.html',
     styleUrl: './tree.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -55,6 +56,7 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
     private destroyed = false;
     private viewInitialized = false;
     private initTimeout?: any;
+    private resizeObserver?: ResizeObserver;
 
     private _model: I2vTree<any>;
     private _config: ResolvedTreeConfig<any>;
@@ -455,8 +457,8 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
                 item.type !== 'd' && item.type !== 'Folder'
                     ? item.icon || this.config.itemIcon
                     : this.model.isExpanded(item)
-                    ? DefaultIcons.folderOpen
-                    : DefaultIcons.folder,
+                        ? DefaultIcons.folderOpen
+                        : DefaultIcons.folder,
             getName: (item: any) => item.name,
             getDomNodeAttr: () => undefined,
             itemIcon: DefaultIcons.file,
@@ -500,9 +502,19 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         this.handleDataChange();
         this.invalidateSize();
         this.syncScrollPos();
-        // Containers that settle late (flex, fonts, a parent that sizes after paint) report the
-        // wrong height on the first pass.
-        this.initTimeout = setTimeout(() => this.invalidateSize(), 1);
+        // The tree can be placed inside flex/grid/layout containers whose size settles after
+        // Angular's first render. Observe the actual tree host instead of relying on window resize.
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => {
+                if (!this.destroyed) {
+                    this.invalidateSize();
+                }
+            });
+            this.resizeObserver.observe(this.element.nativeElement);
+        }
+
+        // One deferred pass covers browsers where the first ResizeObserver notification is delayed.
+        this.initTimeout = setTimeout(() => this.invalidateSize(), 0);
     }
 
     /**
@@ -512,8 +524,11 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         this.destroyed = true;
         this.dispose();
         clearTimeout(this.initTimeout);
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
         clearTimeout(this.filterTextThrottle);
         clearTimeout(this.dragExpand.timeout);
+        clearTimeout(this.typeaheadTimeout);
     }
 
     /**
@@ -533,15 +548,10 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         }
 
         if (evt.key === ' ' || evt.key === 'Spacebar') {
-            // Space toggles the check when checkboxes are on, matching the platform convention for
-            // a multi-select list; otherwise it falls back to expanding, as zTree did.
-            if (highlighted !== undefined) {
-                if (this.config.checkboxes) {
-                    this.toggleCheck(highlighted);
-                } else {
-                    this.model.toggle(highlighted);
-                }
-            }
+            //spacebar handling the nodes expanding and collapsing
+             if (highlighted !== undefined) {
+        this.model.toggle(highlighted);
+    }
             // Always prevented: space would otherwise scroll the container out from under the user.
             evt.preventDefault();
             return;
@@ -560,22 +570,146 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
             return;
         }
 
-        if (evt.key === 'Home' || evt.key === 'End' || evt.key.startsWith('Arrow')) {
-            const direction = evt.key.startsWith('Arrow') ? evt.key.replace('Arrow', '') : evt.key,
-                nextHighlightedIndex = this.model.navigate(direction);
+       if (
+    evt.key === 'Home' ||
+    evt.key === 'End' ||
+    evt.key.startsWith('Arrow')
+) {
+    const direction = evt.key.startsWith('Arrow')
+        ? evt.key.replace('Arrow', '')
+        : evt.key;
 
-            if (nextHighlightedIndex !== undefined) {
-                this.scrollToIndex(nextHighlightedIndex);
-                this.activeItemChange.emit(this.model.getHighlightedItem());
-            }
-            evt.preventDefault();
-            return;
+    const items = this.model.items;
+    const current = this.model.getHighlightedItem();
+
+    /*
+     * Arrow Up / Down:
+     * Navigate only between top-level parent nodes.
+     * A parent without children is also included.
+     */
+    if (direction === 'Up' || direction === 'Down') {
+        const currentIndex = current
+            ? items.findIndex(node => node.item === current)
+            : -1;
+
+        const step = direction === 'Down' ? 1 : -1;
+        let nextIndex = currentIndex + step;
+
+        while (
+            nextIndex >= 0 &&
+            nextIndex < items.length &&
+            !items[nextIndex].parent?.isRoot
+        ) {
+            nextIndex += step;
         }
 
-        this.handleTypeahead(evt);
+        if (
+            nextIndex >= 0 &&
+            nextIndex < items.length
+        ) {
+            const nextItem = items[nextIndex].item;
+
+            this.model.highlightByIndex(nextIndex);
+
+            this.model.selectWithModifiers(nextItem, {
+                ctrl: false,
+                shift: false
+            });
+
+            this.scrollToIndex(nextIndex);
+            this.activeItemChange.emit(nextItem);
+        }
+
+        evt.preventDefault();
+        return;
     }
 
-    /**
+    /*
+     * Arrow Right:
+     * Move downward through the visible tree.
+     *
+     * Parent -> child -> child -> next parent -> child ...
+     */
+    if (direction === 'Right') {
+    const currentIndex = current
+        ? items.findIndex(node => node.item === current)
+        : -1;
+
+    if (currentIndex >= 0 && currentIndex + 1 < items.length) {
+        const nextIndex = currentIndex + 1;
+        const nextItem = items[nextIndex].item;
+
+        this.model.highlightByIndex(nextIndex);
+
+        this.model.selectWithModifiers(nextItem, {
+            ctrl: false,
+            shift: false
+        });
+
+        this.scrollToIndex(nextIndex);
+        this.activeItemChange.emit(nextItem);
+    }
+
+    evt.preventDefault();
+    return;
+}
+
+    /*
+     * Arrow Left:
+     * Move upward through the visible tree.
+     *
+     * child -> previous child -> parent -> previous parent ...
+     */
+    if (direction === 'Left') {
+        const currentIndex = current
+            ? items.findIndex(node => node.item === current)
+            : -1;
+
+        if (currentIndex > 0) {
+            const nextIndex = currentIndex - 1;
+            const nextItem = items[nextIndex].item;
+
+            this.model.highlightByIndex(nextIndex);
+
+            this.model.selectWithModifiers(nextItem, {
+                ctrl: false,
+                shift: false
+            });
+
+            this.scrollToIndex(nextIndex);
+            this.activeItemChange.emit(nextItem);
+        }
+
+        evt.preventDefault();
+        return;
+    }
+
+    /*
+     * Home / End:
+     * Keep the existing model behavior.
+     */
+    const nextHighlightedIndex = this.model.navigate(direction);
+
+    if (nextHighlightedIndex !== undefined) {
+        const nextItem = this.model.getHighlightedItem();
+
+        if (nextItem !== undefined) {
+            this.model.selectWithModifiers(nextItem, {
+                ctrl: false,
+                shift: false
+            });
+
+            this.scrollToIndex(nextHighlightedIndex);
+            this.activeItemChange.emit(nextItem);
+        }
+    }
+
+    evt.preventDefault();
+    return;
+}
+
+this.handleTypeahead(evt);
+}    /**
      * Jump to a row by typing its first letters.
      *
      * Only single printable characters with no modifier qualify, so shortcuts such as ctrl+A are
@@ -626,12 +760,8 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         if (this.element.nativeElement) {
             const bounds = this.element.nativeElement.getBoundingClientRect();
             this.renderArea.viewerHeight = bounds.height;
-            if (this.renderArea.itemCount !== this.visibleItems.length) {
-                this.updateVisibleItems();
-                // This component is OnPush and invalidateSize is called imperatively, so nothing
-                // else marks it dirty. Without this the newly computed rows are never rendered.
-                this.refresh();
-            }
+            this.updateVisibleItems();
+            this.refresh();
         }
     }
 
@@ -741,7 +871,23 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
         if (this.isDisabled(item)) {
             return;
         }
-        this.model.selectWithModifiers(item, { ctrl: evt.ctrlKey || evt.metaKey, shift: evt.shiftKey });
+
+        // Existing selection + highlight/focus
+        this.model.selectWithModifiers(item, {
+            ctrl: evt.ctrlKey || evt.metaKey,
+            shift: evt.shiftKey
+        });
+
+        // Expand/collapse when clicking anywhere on an expandable node
+        if (this.model.isExpandable(item)) {
+            this.model.toggle(item);
+
+            this.expandChange.emit({
+                item,
+                expanded: this.model.isExpanded(item)
+            });
+        }
+
         this.rowClick.emit({ event: evt, item });
     }
 
@@ -774,6 +920,7 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
     public handleCheckboxClick(evt: Event, item: any) {
         // The row underneath must not select on a checkbox click: picking an item and looking at it
         // are different intents, and a checkbox click means only the former.
+        
         evt.stopPropagation();
         this.toggleCheck(item);
     }
@@ -867,9 +1014,10 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
     }
 
     /** @ignore */
-    public getExpanderIcon(item: any) {
-        const iconType = this.model.isExpanded(item) ? 'down' : 'right';
-        return `i2v-expander i2v-expander-${iconType}`;
+    public getExpanderIcon(item: any): string {
+        return this.model.isExpanded(item)
+            ? 'assets/Outline/chevron-down.svg'
+            : 'assets/Outline/chevron-right.svg';
     }
 
     /**
@@ -887,9 +1035,16 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
     public handleDragstart(evt: DragEvent, node: Node<any>) {
         this.ownDragItem = node;
         if (this.canDrag(node.item)) {
+            // Starting a drag is also a row-selection gesture. Use the same model API as
+            // handleRowClick so the dragged row receives the normal selected/highlight state.
+            // Do not touch checkbox state or emit a synthetic click event.
+            this.model.selectWithModifiers(node.item, { ctrl: false, shift: false });
             if (evt.dataTransfer) {
                 evt.dataTransfer.dropEffect = 'move';
-                evt.dataTransfer.setData(TREE_ITEM_MIME, this.getDragData(node.item));
+                const dragData = this.getDragData(node.item);
+                evt.dataTransfer.setData(TREE_ITEM_MIME, dragData);
+                // External native drop targets must not depend on a library-private MIME type.
+                evt.dataTransfer.setData('text/plain', dragData);
                 evt.dataTransfer.setData(`text/plain.${this.ownId}`, '{}');
             }
         }
@@ -1007,8 +1162,8 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
             draggedItem = evt.dataTransfer!.types.includes(`text/plain.${this.ownId}`)
                 ? this.ownDragItem
                 : readExternalData
-                ? this.readExternalDragData(evt)
-                : undefined;
+                    ? this.readExternalDragData(evt)
+                    : undefined;
 
         return {
             draggedItem,
@@ -1050,10 +1205,10 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
                 !itemAtIndex || !itemAtIndex.parent
                     ? undefined
                     : area === 'before'
-                    ? itemAtIndex.index
-                    : area === 'after'
-                    ? itemAtIndex.index + 1
-                    : undefined,
+                        ? itemAtIndex.index
+                        : area === 'after'
+                            ? itemAtIndex.index + 1
+                            : undefined,
             item = !itemAtIndex ? undefined : area === 'on' ? itemAtIndex : itemAtIndex.parent;
 
         return { flatIndex, itemIndex, item, area };
@@ -1195,8 +1350,16 @@ export class I2vTreeComponent implements AfterContentInit, AfterViewInit, OnDest
             return;
         }
         this.renderArea.itemCount = this.model.items.length;
+        // A reload can shrink the data (or clear and refill it). The render area only re-clamps its
+        // scroll position when the viewer height changes, so a stale position left the visible
+        // window pointing past the new data until the next scroll event.
+        const maxScroll = Math.max(0, this.renderArea.totalHeight - this.renderArea.viewerHeight);
+        if (this.renderArea.scrollPos > maxScroll) {
+            this.renderArea.scrollPos = maxScroll;
+        }
         this.updateVisibleItems();
         this.refresh();
+        this.syncScrollPos();
     }
 
     private refresh() {

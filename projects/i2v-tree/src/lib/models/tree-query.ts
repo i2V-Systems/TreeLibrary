@@ -133,30 +133,41 @@ export class TreeQuery<T> implements Iterable<Node<T>> {
      * @param filter A delegate returning bool, true if its ancestors should be iterable
      * @param excludeMatch False to yield items that match the filter
      */
-    public hasDescendantNode(filter: (node: Node<T>) => boolean, excludeMatch: boolean = false) {
-        const iterator = this.iterate,
-            self = this;
+    public hasDescendantNode(
+  filter: (node: Node<T>) => boolean,
+  excludeMatch: boolean = false
+) {
+  const iterator = this.iterate;
+  const self = this;
 
-        return this.extend(function*() {
-            const matches = new Set<Node<T>>();
-            for (const node of self.ascend()) {
-                if (!matches.has(node) && filter(node)) {
-                    if (!excludeMatch) {
-                        matches.add(node);
-                    }
-                    for (const p of node.ancestors()) {
-                        matches.add(p);
-                    }
-                }
-            }
+  return this.extend(function* () {
+    const matches = new Set<Node<T>>();
 
-            for (const node of iterator()) {
-                if (matches.has(node)) {
-                    yield node;
-                }
-            }
+    for (const node of self.ascend()) {
+      if (filter(node)) {
+        if (!excludeMatch) {
+          matches.add(node);
+        }
+
+        // Keep ancestors of every matching node.
+        for (const parent of node.ancestors()) {
+          matches.add(parent);
+        }
+
+        // If this node matches, keep all its descendants too.
+        node.visitSubtree(child => {
+          matches.add(child);
         });
+      }
     }
+
+    for (const node of iterator()) {
+      if (matches.has(node)) {
+        yield node;
+      }
+    }
+  });
+}
 
     /**
      * Get the number of items in the hierarchy
